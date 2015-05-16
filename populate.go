@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+const (
+	cannotParseErr              = "cannot parse"
+	duplicateRestrictToKeyErr   = "duplicate restrict to key"
+	envKeyNotSetWhenRequiredErr = "env key not set when required"
+	envTagNotSetErr             = "env tag not set"
+	expectedPointerErr          = "expected pointer"
+	expectedStructErr           = "expected struct"
+	fieldTypeNotAllowedErr      = "field type not allowed"
+	invalidTagErr               = "invalid tag, must be key,{required,optional} or key,{required,optional},value for struct fields"
+	invalidTagRestrictToErr     = "invalid tag, not in restrict to range"
+)
+
 func populate(reflectValue reflect.Value, populateOptions PopulateOptions, recursive bool) error {
 	restrictTo, err := getRestrictTo(populateOptions.RestrictTo)
 	if err != nil {
@@ -20,10 +32,10 @@ func populate(reflectValue reflect.Value, populateOptions PopulateOptions, recur
 	if reflectValue.Type().Kind() == reflect.Ptr {
 		reflectValue = reflectValue.Elem()
 	} else if !recursive {
-		return fmt.Errorf("expected pointer, got %v", reflectValue)
+		return fmt.Errorf("%s: %v", expectedPointerErr, reflectValue.Type())
 	}
 	if reflectValue.Type().Kind() != reflect.Struct {
-		return fmt.Errorf("expected struct pointer, got %v", reflectValue)
+		return fmt.Errorf("%s: %v", expectedStructErr, reflectValue.Type())
 	}
 	numField := reflectValue.NumField()
 	for i := 0; i < numField; i++ {
@@ -37,7 +49,7 @@ func populate(reflectValue reflect.Value, populateOptions PopulateOptions, recur
 			value = os.Getenv(envTag.key)
 			if value == "" {
 				if envTag.required {
-					return fmt.Errorf("%s is not set and is required for %v", envTag.key, reflectValue)
+					return fmt.Errorf("%s: %s %v", envKeyNotSetWhenRequiredErr, envTag.key, reflectValue.Type())
 				}
 				continue
 			}
@@ -67,7 +79,7 @@ func getRestrictTo(restrictTo []string) (map[string]bool, error) {
 	restrictToMap := make(map[string]bool)
 	for _, envKey := range restrictTo {
 		if _, ok := restrictToMap[envKey]; ok {
-			return nil, fmt.Errorf("duplicate restrict to env key %s", envKey)
+			return nil, fmt.Errorf("%s: %s", duplicateRestrictToKeyErr, envKey)
 		}
 		restrictToMap[envKey] = true
 	}
@@ -100,16 +112,16 @@ type envTag struct {
 func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*envTag, error) {
 	tag := structField.Tag.Get("env")
 	if tag == "" {
-		return nil, fmt.Errorf("must have `env` tag on every field")
+		return nil, fmt.Errorf("%s: %v", envTagNotSetErr, structField)
 	}
 	split := strings.Split(tag, ",")
 	if len(split) != 2 && len(split) != 3 {
-		return nil, fmt.Errorf("invalid tag %s, must be key,{required,optional} or key,{required,optional},value", tag)
+		return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
 	}
 	key := split[0]
 	if restrictTo != nil {
 		if _, ok := restrictTo[key]; !ok {
-			return nil, fmt.Errorf("invalid tag %s, key must be one of %v", tag, restrictTo)
+			return nil, fmt.Errorf("%s: %s %v", invalidTagRestrictToErr, tag, restrictTo)
 		}
 	}
 	required := false
@@ -119,18 +131,18 @@ func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*en
 	case "optional":
 		required = false
 	default:
-		return nil, fmt.Errorf("invalid tag %s, second field must be one of required,optionl", tag)
+		return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
 	}
 	value := ""
 	switch structField.Type.Kind() {
 	case reflect.Struct:
 		if len(split) == 3 {
-			return nil, fmt.Errorf("invalid tag %s, must have value for struct fields", tag)
+			return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
 		}
 		value = split[2]
 	default:
 		if len(split) == 3 {
-			return nil, fmt.Errorf("invalid tag %s, can only have value for struct fields", tag)
+			return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
 		}
 	}
 	return &envTag{
@@ -148,80 +160,80 @@ func parseField(structField reflect.StructField, value string) (interface{}, err
 	case reflect.Int:
 		parsedValue, err := strconv.ParseInt(value, 10, 0)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return int(parsedValue), nil
 	case reflect.Int8:
 		parsedValue, err := strconv.ParseInt(value, 10, 8)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return int8(parsedValue), nil
 	case reflect.Int16:
 		parsedValue, err := strconv.ParseInt(value, 10, 16)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return int16(parsedValue), nil
 	case reflect.Int32:
 		parsedValue, err := strconv.ParseInt(value, 10, 32)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return int32(parsedValue), nil
 
 	case reflect.Int64:
 		parsedValue, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return int64(parsedValue), nil
 	case reflect.Uint:
 		parsedValue, err := strconv.ParseUint(value, 10, 0)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint(parsedValue), nil
 	case reflect.Uint8:
 		parsedValue, err := strconv.ParseUint(value, 10, 8)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint8(parsedValue), nil
 	case reflect.Uint16:
 		parsedValue, err := strconv.ParseUint(value, 10, 16)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint16(parsedValue), nil
 	case reflect.Uint32:
 		parsedValue, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint32(parsedValue), nil
 
 	case reflect.Uint64:
 		parsedValue, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint64(parsedValue), nil
 	case reflect.Float32:
 		parsedValue, err := strconv.ParseFloat(value, 32)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return float32(parsedValue), nil
 	case reflect.Float64:
 		parsedValue, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return float64(parsedValue), nil
 	case reflect.String:
 		return value, nil
 	default:
-		return nil, fmt.Errorf("field type %v not allowed", fieldKind)
+		return nil, fmt.Errorf("%s: %v", fieldTypeNotAllowedErr, fieldKind)
 	}
 }

@@ -1,0 +1,5 @@
+- type: parallel
+  services:
+  - linux_amd64
+  steps:
+  - command: make test

@@ -16,7 +16,7 @@ const (
 	expectedPointerErr          = "expected pointer"
 	expectedStructErr           = "expected struct"
 	fieldTypeNotAllowedErr      = "field type not allowed"
-	invalidTagErr               = "invalid tag, must be key,{required,optional} or key,{required,optional},value for struct fields"
+	invalidTagErr               = "invalid tag, must be key,{required,optional} or key,{required,optional},value"
 	invalidTagRestrictToErr     = "invalid tag, not in restrict to range"
 )
 
@@ -136,7 +136,7 @@ func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*en
 	value := ""
 	switch structField.Type.Kind() {
 	case reflect.Struct:
-		if len(split) == 3 {
+		if len(split) != 3 {
 			return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
 		}
 		value = split[2]

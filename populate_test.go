@@ -13,11 +13,15 @@ var (
 		"OPTIONAL_STRING",
 		"OPTIONAL_INT",
 		"OPTIONAL_BOOL",
+		"STRUCT_OPTIONAL_INT",
+		"OPTIONAL_STRUCT",
 	}
 	testEnvRestrictToWithoutOptionalBool = []string{
 		"OPTIONAL_STRING",
 		"OPTIONAL_INT",
 		"REQUIRED_STRING",
+		"STRUCT_OPTIONAL_INT",
+		"OPTIONAL_STRUCT",
 	}
 )
 
@@ -26,6 +30,9 @@ type testEnv struct {
 	OptionalString string `env:"OPTIONAL_STRING,optional"`
 	OptionalInt    int    `env:"OPTIONAL_INT,optional"`
 	OptionalBool   bool   `env:"OPTIONAL_BOOL,optional"`
+	OptionalStruct struct {
+		StructOptionalInt int `env:"STRUCT_OPTIONAL_INT,optional"`
+	} `env:"OPTIONAL_STRUCT,optional,FOO"`
 }
 
 // TODO(pedge): if tests are run in parallel, this is affecting global state
@@ -94,6 +101,32 @@ func TestParsingBool(t *testing.T) {
 	})
 	testEnv = populateTestEnv(t)
 	checkEqual(t, false, testEnv.OptionalBool)
+}
+
+func TestOptionalStruct(t *testing.T) {
+	testState := newTestState(testEnvRestrictTo)
+	defer testState.reset()
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT":     "FOO",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv := populateTestEnv(t)
+	checkEqual(t, 1234, testEnv.OptionalStruct.StructOptionalInt)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT":     "",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 0, testEnv.OptionalStruct.StructOptionalInt)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT":     "BAR",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 0, testEnv.OptionalStruct.StructOptionalInt)
 }
 
 type testState struct {

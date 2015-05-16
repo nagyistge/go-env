@@ -12,6 +12,7 @@
 	errcheck \
 	pretest \
 	test \
+	cov \
 	checkjet \
 	jet \
 	clean \
@@ -51,6 +52,11 @@ pretest: lint vet errcheck
 
 test: pretest
 	go test -test.v ./...
+
+cov: testdeps
+	go get -v github.com/axw/gocov/gocov
+	go get -v golang.org/x/tools/cmd/cover
+	gocov test | gocov report
 
 checkjet:
 	@ if ! which jet > /dev/null; then \

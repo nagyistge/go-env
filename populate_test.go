@@ -71,7 +71,29 @@ func TestCannotParse(t *testing.T) {
 		"OPTIONAL_INT":    "abc",
 	})
 	populateTestEnvExpectError(t, cannotParseErr)
+}
 
+func TestParsingBool(t *testing.T) {
+	testState := newTestState(testEnvRestrictTo)
+	defer testState.reset()
+	testSetenv(map[string]string{
+		"REQUIRED_STRING": "foo",
+		"OPTIONAL_BOOL":   "1",
+	})
+	testEnv := populateTestEnv(t)
+	checkEqual(t, true, testEnv.OptionalBool)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING": "foo",
+		"OPTIONAL_BOOL":   "",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, false, testEnv.OptionalBool)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING": "foo",
+		"OPTIONAL_BOOL":   "false",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, false, testEnv.OptionalBool)
 }
 
 type testState struct {

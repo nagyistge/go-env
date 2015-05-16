@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -16,7 +17,8 @@ const (
 	expectedPointerErr          = "expected pointer"
 	expectedStructErr           = "expected struct"
 	fieldTypeNotAllowedErr      = "field type not allowed"
-	invalidTagErr               = "invalid tag, must be key,{required,optional} or key,{required,optional},value"
+	invalidTagErr               = "invalid tag, must be KEY,{required}"
+	invalidStructTagErr         = "invalid struct tag, must be KEY,match=MATCH"
 	invalidTagRestrictToErr     = "invalid tag, not in restrict to range"
 )
 
@@ -56,7 +58,11 @@ func populate(reflectValue reflect.Value, populateOptions PopulateOptions, recur
 		}
 		switch structField.Type.Kind() {
 		case reflect.Struct:
-			if value == envTag.value {
+			regexp, err := regexp.Compile(envTag.match)
+			if err != nil {
+				return err
+			}
+			if regexp.MatchString(value) {
 				if err := populate(reflectValue.Field(i), populateOptions, true); err != nil {
 					return err
 				}
@@ -106,7 +112,7 @@ func readDecoders(decoders []Decoder) (map[string]string, error) {
 type envTag struct {
 	key      string
 	required bool
-	value    string
+	match    string
 }
 
 func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*envTag, error) {
@@ -114,10 +120,7 @@ func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*en
 	if tag == "" {
 		return nil, fmt.Errorf("%s: %v", envTagNotSetErr, structField)
 	}
-	split := strings.Split(tag, ",")
-	if len(split) != 2 && len(split) != 3 {
-		return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
-	}
+	split := strings.SplitN(tag, ",", 2)
 	key := split[0]
 	if restrictTo != nil {
 		if _, ok := restrictTo[key]; !ok {
@@ -125,30 +128,28 @@ func getEnvTag(structField reflect.StructField, restrictTo map[string]bool) (*en
 		}
 	}
 	required := false
-	switch split[1] {
-	case "required":
-		required = true
-	case "optional":
-		required = false
-	default:
-		return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
-	}
-	value := ""
+	match := ""
 	switch structField.Type.Kind() {
 	case reflect.Struct:
-		if len(split) != 3 {
-			return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
+		propertySplit := strings.SplitN(split[1], "=", 2)
+		if propertySplit[0] != "match" {
+			return nil, fmt.Errorf("%s: %s", invalidStructTagErr, tag)
 		}
-		value = split[2]
+		match = propertySplit[1]
 	default:
-		if len(split) == 3 {
-			return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
+		if len(split) == 2 {
+			switch split[1] {
+			case "required":
+				required = true
+			default:
+				return nil, fmt.Errorf("%s: %s", invalidTagErr, tag)
+			}
 		}
 	}
 	return &envTag{
 		key:      key,
 		required: required,
-		value:    value,
+		match:    match,
 	}, nil
 }
 
@@ -219,18 +220,6 @@ func parseField(structField reflect.StructField, value string) (interface{}, err
 			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
 		}
 		return uint64(parsedValue), nil
-	case reflect.Float32:
-		parsedValue, err := strconv.ParseFloat(value, 32)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
-		}
-		return float32(parsedValue), nil
-	case reflect.Float64:
-		parsedValue, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %s", cannotParseErr, err.Error())
-		}
-		return float64(parsedValue), nil
 	case reflect.String:
 		return value, nil
 	default:

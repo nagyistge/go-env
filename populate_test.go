@@ -1,6 +1,9 @@
 package env
 
 import (
+	"bytes"
+	"io"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -15,6 +18,7 @@ var (
 		"OPTIONAL_BOOL",
 		"STRUCT_OPTIONAL_INT",
 		"OPTIONAL_STRUCT",
+		"OPTIONAL_STRUCT_TWO",
 	}
 	testEnvRestrictToWithoutOptionalBool = []string{
 		"OPTIONAL_STRING",
@@ -22,17 +26,21 @@ var (
 		"REQUIRED_STRING",
 		"STRUCT_OPTIONAL_INT",
 		"OPTIONAL_STRUCT",
+		"OPTIONAL_STRUCT_TWO",
 	}
 )
 
 type testEnv struct {
 	RequiredString string `env:"REQUIRED_STRING,required"`
-	OptionalString string `env:"OPTIONAL_STRING,optional"`
-	OptionalInt    int    `env:"OPTIONAL_INT,optional"`
-	OptionalBool   bool   `env:"OPTIONAL_BOOL,optional"`
+	OptionalString string `env:"OPTIONAL_STRING"`
+	OptionalInt    int    `env:"OPTIONAL_INT"`
+	OptionalBool   bool   `env:"OPTIONAL_BOOL"`
 	OptionalStruct struct {
-		StructOptionalInt int `env:"STRUCT_OPTIONAL_INT,optional"`
-	} `env:"OPTIONAL_STRUCT,optional,FOO"`
+		StructOptionalInt int `env:"STRUCT_OPTIONAL_INT"`
+	} `env:"OPTIONAL_STRUCT,match=FOO"`
+	OptionalStructTwo struct {
+		StructOptionalInt int `env:"STRUCT_OPTIONAL_INT"`
+	} `env:"OPTIONAL_STRUCT_TWO,match=^(FOO|BAR)$"`
 }
 
 // TODO(pedge): if tests are run in parallel, this is affecting global state
@@ -127,6 +135,71 @@ func TestOptionalStruct(t *testing.T) {
 	})
 	testEnv = populateTestEnv(t)
 	checkEqual(t, 0, testEnv.OptionalStruct.StructOptionalInt)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT":     "FOOO",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 1234, testEnv.OptionalStruct.StructOptionalInt)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT":     "FOO$",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 1234, testEnv.OptionalStruct.StructOptionalInt)
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 1234, testEnv.OptionalStruct.StructOptionalInt)
+	testSetenv(map[string]string{
+		"REQUIRED_STRING":     "foo",
+		"OPTIONAL_STRUCT_TWO": "BAR",
+		"STRUCT_OPTIONAL_INT": "1234",
+	})
+	testEnv = populateTestEnv(t)
+	checkEqual(t, 1234, testEnv.OptionalStructTwo.StructOptionalInt)
+}
+
+func TestEnvFileDecoderBasic(t *testing.T) {
+	reader := getTestReader(t, "_test/env.env")
+	m, err := newEnvFileDecoder(reader).Decode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEqual(t, "bar", m["FOO"])
+	checkEqual(t, "baz", m["BAR"])
+	checkEqual(t, "", m["BAZ"])
+	checkEqual(t, "9", m["BAT"])
+	checkEqual(t, "false", m["BAN"])
+
+}
+
+func TestJSONDecoderBasic(t *testing.T) {
+	reader := getTestReader(t, "_test/env.json")
+	m, err := newJSONDecoder(reader).Decode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEqual(t, "bar", m["FOO"])
+	checkEqual(t, "baz", m["BAR"])
+	checkEqual(t, "", m["BAZ"])
+	checkEqual(t, "10", m["BAT"])
+	checkEqual(t, "false", m["BAN"])
+}
+
+func TestPopulateDecoders(t *testing.T) {
+	testState := newTestState(testEnvRestrictTo)
+	defer testState.reset()
+	decoders := []Decoder{
+		newEnvFileDecoder(getTestReader(t, "_test/env.env")),
+		newJSONDecoder(getTestReader(t, "_test/env.json")),
+	}
+	testSetenv(map[string]string{
+		"REQUIRED_STRING": "foo",
+	})
+	testEnv := populateTestEnvLong(t, testEnvRestrictTo, decoders)
+	checkEqual(t, "BAZ", testEnv.RequiredString)
+	checkEqual(t, "BAR", testEnv.OptionalString)
 }
 
 type testState struct {
@@ -154,11 +227,16 @@ func testSetenv(env map[string]string) {
 }
 
 func populateTestEnv(t *testing.T) *testEnv {
+	return populateTestEnvLong(t, testEnvRestrictTo, nil)
+}
+
+func populateTestEnvLong(t *testing.T, restrictTo []string, decoders []Decoder) *testEnv {
 	testEnv := &testEnv{}
 	if err := Populate(
 		testEnv,
 		PopulateOptions{
-			RestrictTo: testEnvRestrictTo,
+			RestrictTo: restrictTo,
+			Decoders:   decoders,
 		},
 	); err != nil {
 		t.Error(err)
@@ -184,6 +262,24 @@ func populateTestEnvExpectErrorLong(t *testing.T, expected string, restrictTo []
 	} else if !strings.HasPrefix(err.Error(), expected) {
 		t.Errorf("expected error type %s, got error %s", expected, err.Error())
 	}
+}
+
+func getTestReader(t *testing.T, filePath string) io.Reader {
+	file, err := os.Open(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return bytes.NewBuffer(data)
 }
 
 func checkEqual(t *testing.T, expected interface{}, actual interface{}) {

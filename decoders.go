@@ -75,7 +75,9 @@ func (e *envFileDecoder) decode() (map[string]string, error) {
 			if len(trimmedLine) > 0 {
 				split := strings.SplitN(line, "=", 2)
 				if len(split) == 2 {
-					env[split[0]] = split[1]
+					env[split[0]] = strings.TrimSpace(split[1])
+				} else {
+					env[split[0]] = ""
 				}
 			}
 		}
@@ -111,8 +113,10 @@ func (j *jsonDecoder) decode() (map[string]string, error) {
 		switch value.(type) {
 		case string:
 			env[key] = value.(string)
-		case int:
-			env[key] = fmt.Sprintf("%d", value.(int))
+		case int64:
+			env[key] = fmt.Sprintf("%d", value.(int64))
+		case float64:
+			env[key] = fmt.Sprintf("%d", int64(value.(float64)))
 		case bool:
 			env[key] = fmt.Sprintf("%v", value.(bool))
 		default:

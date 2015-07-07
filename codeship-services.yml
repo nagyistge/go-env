@@ -1,7 +1,0 @@
-linux_amd64:
-  build:
-    image: pedge/goappenv
-    dockerfile: Dockerfile
-  environment:
-    GOOS: linux
-    GOARCH: amd64

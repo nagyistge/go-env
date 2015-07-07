@@ -161,7 +161,7 @@ func TestOptionalStruct(t *testing.T) {
 }
 
 func TestEnvFileDecoderBasic(t *testing.T) {
-	reader := getTestReader(t, "_test/env.env")
+	reader := getTestReader(t, "_testdata/env.env")
 	m, err := newEnvFileDecoder(reader).Decode()
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestEnvFileDecoderBasic(t *testing.T) {
 }
 
 func TestJSONDecoderBasic(t *testing.T) {
-	reader := getTestReader(t, "_test/env.json")
+	reader := getTestReader(t, "_testdata/env.json")
 	m, err := newJSONDecoder(reader).Decode()
 	if err != nil {
 		t.Fatal(err)
@@ -191,8 +191,8 @@ func TestPopulateDecoders(t *testing.T) {
 	testState := newTestState(testEnvRestrictTo)
 	defer testState.reset()
 	decoders := []Decoder{
-		newEnvFileDecoder(getTestReader(t, "_test/env.env")),
-		newJSONDecoder(getTestReader(t, "_test/env.json")),
+		newEnvFileDecoder(getTestReader(t, "_testdata/env.env")),
+		newJSONDecoder(getTestReader(t, "_testdata/env.json")),
 	}
 	testSetenv(map[string]string{
 		"REQUIRED_STRING": "foo",

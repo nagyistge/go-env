@@ -3,8 +3,8 @@
 
 See the [Godoc](https://godoc.org/github.com/peter-edge/go-env) for usage.
 
-Package env handles environment variables in a structured manner. It uses reflection to set
-fields on a struct pointer passed to the main public method, `Populate`.
+Package env handles environment variables in a structured manner. It uses reflection
+to set fields on a struct pointer passed to the main public method, `Populate`.
 
 Example (from the test):
 
